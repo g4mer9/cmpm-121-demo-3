@@ -4,9 +4,11 @@ import "leaflet/dist/leaflet.css";
 import "./style.css";
 import "./leafletWorkaround.ts";
 import luck from "./luck.ts";
+import { Board } from "./board.ts";
 
 //constants=====================================================================================================================================================
 const OAKES_CLASSROOM = leaflet.latLng(36.98949379578401, -122.06277128548504);
+const OAKES_CLASSROOM_CELL = { i: 369894, j: -1220627 };
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
@@ -44,8 +46,7 @@ const playerMarker = leaflet.marker(OAKES_CLASSROOM);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
-// deno-lint-ignore prefer-const
-let playerPoints = 0;
+const playerPoints = 0;
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
 statusPanel.innerHTML = "No points yet...";
 
@@ -55,14 +56,22 @@ const player: Player = {
   points: playerPoints,
 };
 
+const board = new Board(TILE_DEGREES, NEIGHBORHOOD_SIZE);
+
 //functions=====================================================================================================================================================
 function createCache(i: number, j: number): Cache {
+  const cell = board.getCellForPoint(leaflet.latLng(
+    OAKES_CLASSROOM.lat + i * TILE_DEGREES,
+    OAKES_CLASSROOM.lng + j * TILE_DEGREES,
+  ));
   const latLng = leaflet.latLng(
-    player.latLng.lat + i * TILE_DEGREES,
-    player.latLng.lng + j * TILE_DEGREES,
+    cell.i * TILE_DEGREES,
+    cell.j * TILE_DEGREES,
   );
-  const value = Math.floor(luck([i, j, "initialValue"].toString()) * 100);
-  return { id: `${i},${j}`, latLng, value };
+  const value = Math.floor(
+    luck([cell.i, cell.j, "initialValue"].toString()) * 100,
+  );
+  return { id: `${cell.i},${cell.j}`, latLng, value };
 }
 
 function handleCacheInteraction(cache: Cache) {
@@ -102,14 +111,20 @@ function handleCacheInteraction(cache: Cache) {
 }
 
 function spawnCaches() {
-  for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
-    for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
+  for (
+    let i = -NEIGHBORHOOD_SIZE + OAKES_CLASSROOM_CELL.i;
+    i < NEIGHBORHOOD_SIZE + OAKES_CLASSROOM_CELL.i;
+    i++
+  ) {
+    for (
+      let j = -NEIGHBORHOOD_SIZE + OAKES_CLASSROOM_CELL.j;
+      j < NEIGHBORHOOD_SIZE + OAKES_CLASSROOM_CELL.j;
+      j++
+    ) {
       if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
         const cache = createCache(i, j);
-        const rect = leaflet.rectangle(leaflet.latLngBounds([
-          [cache.latLng.lat, cache.latLng.lng],
-          [cache.latLng.lat + TILE_DEGREES, cache.latLng.lng + TILE_DEGREES],
-        ]));
+        const rect = leaflet.rectangle(board.getCellBounds({ i, j }));
+        console.log(board.getCellBounds({ i, j }));
         rect.addTo(map);
         rect.bindPopup(() => handleCacheInteraction(cache));
       }
