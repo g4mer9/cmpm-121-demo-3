@@ -15,15 +15,22 @@ const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 
 //interfaces=====================================================================================================================================================
+interface Coin {
+  id: string;
+  serial: number;
+}
+
 interface Cache {
   id: string;
   latLng: leaflet.LatLng;
   value: number;
+  coins: Coin[];
 }
 interface Player {
   latLng: leaflet.LatLng;
   marker: leaflet.Marker;
   points: number;
+  ownedCoins: Coin[];
 }
 
 //instances=====================================================================================================================================================
@@ -54,6 +61,7 @@ const player: Player = {
   latLng: OAKES_CLASSROOM,
   marker: playerMarker,
   points: playerPoints,
+  ownedCoins: [],
 };
 
 const board = new Board(TILE_DEGREES, NEIGHBORHOOD_SIZE);
@@ -71,42 +79,58 @@ function createCache(i: number, j: number): Cache {
   const value = Math.floor(
     luck([cell.i, cell.j, "initialValue"].toString()) * 100,
   );
-  return { id: `${cell.i},${cell.j}`, latLng, value };
+  const coins: Coin[] = [];
+  for (let serial = 0; serial < value; serial++) {
+    coins.push({ id: `${cell.i}:${cell.j}`, serial });
+  }
+  return { id: `${cell.i},${cell.j}`, latLng, value, coins };
 }
 
 function handleCacheInteraction(cache: Cache) {
   const popupDiv = document.createElement("div");
-  popupDiv.innerHTML = `
-    <div>There is a cache here at "${cache.id}". It has value <span id="value">${cache.value}</span>.</div>
-    <button id="collect">Collect</button>
-    <button id="deposit">Deposit</button>`;
+  const updatePopup = () => {
+    const coinList = cache.coins.map((coin) => `${coin.id}#${coin.serial}`)
+      .join(", ");
+    popupDiv.innerHTML = `
+      <div>There is a cache here at "${cache.id}". It has value <span id="value">${cache.value}</span>.</div>
+      <div>Coins: ${coinList}</div>
+      <button id="collect">Collect</button>
+      <button id="deposit">Deposit</button>`;
 
-  popupDiv.querySelector<HTMLButtonElement>("#collect")!.addEventListener(
-    "click",
-    () => {
-      if (cache.value > 0) {
-        cache.value--;
-        player.points++;
-        statusPanel.innerHTML = `${player.points} points accumulated`;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML = cache
-          .value.toString();
-      }
-    },
-  );
+    popupDiv.querySelector<HTMLButtonElement>("#collect")!.addEventListener(
+      "click",
+      () => {
+        if (cache.value > 0) {
+          cache.value--;
+          player.points++;
+          const collectedCoin = cache.coins.pop();
+          if (collectedCoin) {
+            player.ownedCoins.push(collectedCoin);
+          }
+          statusPanel.innerHTML = `${player.points} points accumulated`;
+          updatePopup();
+        }
+      },
+    );
 
-  popupDiv.querySelector<HTMLButtonElement>("#deposit")!.addEventListener(
-    "click",
-    () => {
-      if (player.points > 0) {
-        cache.value++;
-        player.points--;
-        statusPanel.innerHTML = `${player.points} points accumulated`;
-        popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML = cache
-          .value.toString();
-      }
-    },
-  );
+    popupDiv.querySelector<HTMLButtonElement>("#deposit")!.addEventListener(
+      "click",
+      () => {
+        if (player.points > 0 && player.ownedCoins.length > 0) {
+          cache.value++;
+          player.points--;
+          const depositedCoin = player.ownedCoins.pop();
+          if (depositedCoin) {
+            cache.coins.push(depositedCoin);
+          }
+          statusPanel.innerHTML = `${player.points} points accumulated`;
+          updatePopup();
+        }
+      },
+    );
+  };
 
+  updatePopup();
   return popupDiv;
 }
 
