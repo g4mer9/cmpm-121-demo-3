@@ -25,9 +25,13 @@ interface Cache {
   latLng: leaflet.LatLng;
   value: number;
   coins: Coin[];
+  toMemento(): string;
+  fromMemento(memento: string): void;
 }
+
 interface Player {
   latLng: leaflet.LatLng;
+  cell: { i: number; j: number };
   marker: leaflet.Marker;
   points: number;
   ownedCoins: Coin[];
@@ -59,14 +63,31 @@ statusPanel.innerHTML = "No points yet...";
 
 const player: Player = {
   latLng: OAKES_CLASSROOM,
+  cell: OAKES_CLASSROOM_CELL,
   marker: playerMarker,
   points: playerPoints,
   ownedCoins: [],
 };
 
 const board = new Board(TILE_DEGREES, NEIGHBORHOOD_SIZE);
+const mementoCache: string[][] = [];
+const activeCaches: Cache[][] = [];
 
 //functions=====================================================================================================================================================
+function setMemento(i: number, j: number, value: string) {
+  if (!mementoCache[i]) {
+    mementoCache[i] = [];
+  }
+  mementoCache[i][j] = value;
+}
+
+function setActiveCache(i: number, j: number, cache: Cache) {
+  if (!activeCaches[i]) {
+    activeCaches[i] = [];
+  }
+  activeCaches[i][j] = cache;
+}
+
 function createCache(i: number, j: number): Cache {
   const cell = board.getCellForPoint(leaflet.latLng(
     OAKES_CLASSROOM.lat + i * TILE_DEGREES,
@@ -83,7 +104,27 @@ function createCache(i: number, j: number): Cache {
   for (let serial = 0; serial < value; serial++) {
     coins.push({ id: `${cell.i}:${cell.j}`, serial });
   }
-  return { id: `${cell.i},${cell.j}`, latLng, value, coins };
+  const cache: Cache = {
+    id: `${cell.i},${cell.j}`,
+    latLng,
+    value,
+    coins,
+    toMemento() {
+      return JSON.stringify({ value: this.value, coins: this.coins });
+    },
+    fromMemento(memento: string) {
+      const state = JSON.parse(memento);
+      this.value = state.value;
+      this.coins = state.coins;
+    },
+  };
+
+  // Check for existing memento
+  if (mementoCache[i] && mementoCache[i][j]) {
+    cache.fromMemento(mementoCache[i][j]);
+  }
+
+  return cache;
 }
 
 function handleCacheInteraction(cache: Cache) {
@@ -136,25 +177,73 @@ function handleCacheInteraction(cache: Cache) {
 
 function spawnCaches() {
   for (
-    let i = -NEIGHBORHOOD_SIZE + OAKES_CLASSROOM_CELL.i;
-    i < NEIGHBORHOOD_SIZE + OAKES_CLASSROOM_CELL.i;
+    let i = -NEIGHBORHOOD_SIZE + player.cell.i;
+    i < NEIGHBORHOOD_SIZE + player.cell.i;
     i++
   ) {
     for (
-      let j = -NEIGHBORHOOD_SIZE + OAKES_CLASSROOM_CELL.j;
-      j < NEIGHBORHOOD_SIZE + OAKES_CLASSROOM_CELL.j;
+      let j = -NEIGHBORHOOD_SIZE + player.cell.j;
+      j < NEIGHBORHOOD_SIZE + player.cell.j;
       j++
     ) {
       if (luck([i, j].toString()) < CACHE_SPAWN_PROBABILITY) {
         const cache = createCache(i, j);
+        setActiveCache(i, j, cache);
         const rect = leaflet.rectangle(board.getCellBounds({ i, j }));
-        console.log(board.getCellBounds({ i, j }));
         rect.addTo(map);
         rect.bindPopup(() => handleCacheInteraction(cache));
       }
     }
   }
 }
+
+// Movement functions
+function movePlayer(deltaLat: number, deltaLng: number) {
+  //create memento for all caches in activeCaches
+  for (let i = 359000; i < 370000; i++) {
+    if (activeCaches[i]) {
+      for (let j = -1220700; j < -1220400; j++) {
+        if (activeCaches[i][j]) {
+          setMemento(i, j, activeCaches[i][j].toMemento());
+        }
+      }
+    }
+  }
+
+  player.latLng = leaflet.latLng(
+    player.latLng.lat + deltaLat,
+    player.latLng.lng + deltaLng,
+  );
+  player.cell = board.getCellForPoint(player.latLng);
+  player.marker.setLatLng(player.latLng);
+  map.setView(player.latLng);
+
+  // Remove all caches
+  map.eachLayer((layer: leaflet.Rectangle) => {
+    if (layer instanceof leaflet.Rectangle) {
+      map.removeLayer(layer);
+    }
+  });
+
+  spawnCaches();
+}
+
+document.getElementById("north")!.addEventListener(
+  "click",
+  () => movePlayer(TILE_DEGREES, 0),
+);
+document.getElementById("south")!.addEventListener(
+  "click",
+  () => movePlayer(-TILE_DEGREES, 0),
+);
+document.getElementById("east")!.addEventListener(
+  "click",
+  () => movePlayer(0, -TILE_DEGREES),
+);
+document.getElementById("west")!.addEventListener(
+  "click",
+  () => movePlayer(0, TILE_DEGREES),
+);
 
 //main=====================================================================================================================================================
 spawnCaches();
