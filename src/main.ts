@@ -127,6 +127,7 @@ function createCache(i: number, j: number): Cache {
   return cache;
 }
 
+// All popup interactions
 function handleCacheInteraction(cache: Cache) {
   const popupDiv = document.createElement("div");
   const updatePopup = () => {
@@ -150,6 +151,7 @@ function handleCacheInteraction(cache: Cache) {
           }
           statusPanel.innerHTML = `${player.points} points accumulated`;
           updatePopup();
+          saveGameState();
         }
       },
     );
@@ -166,12 +168,14 @@ function handleCacheInteraction(cache: Cache) {
           }
           statusPanel.innerHTML = `${player.points} points accumulated`;
           updatePopup();
+          saveGameState();
         }
       },
     );
   };
 
   updatePopup();
+
   return popupDiv;
 }
 
@@ -197,7 +201,7 @@ function spawnCaches() {
   }
 }
 
-// Movement functions
+//Button Movement
 function movePlayer(deltaLat: number, deltaLng: number) {
   //create memento for all caches in activeCaches
   for (let i = 359000; i < 370000; i++) {
@@ -226,7 +230,97 @@ function movePlayer(deltaLat: number, deltaLng: number) {
   });
 
   spawnCaches();
+  saveGameState();
+  updateMovementHistory();
 }
+
+// GPS movement
+function movePlayerTo(lat: number, lng: number) {
+  //create memento for all caches in activeCaches
+  for (let i = 359000; i < 370000; i++) {
+    if (activeCaches[i]) {
+      for (let j = -1220700; j < -1220400; j++) {
+        if (activeCaches[i][j]) {
+          setMemento(i, j, activeCaches[i][j].toMemento());
+        }
+      }
+    }
+  }
+  player.latLng = leaflet.latLng(lat, lng);
+  player.cell = board.getCellForPoint(player.latLng);
+  player.marker.setLatLng(player.latLng);
+  map.setView(player.latLng);
+
+  // Remove all caches
+  map.eachLayer((layer: leaflet.Rectangle) => {
+    if (layer instanceof leaflet.Rectangle) {
+      map.removeLayer(layer);
+    }
+  });
+
+  spawnCaches();
+  saveGameState();
+}
+
+// Save/load doesnt seem to work, but it doesn't seem to break anything either.
+function saveGameState() {
+  const playerState = {
+    latLng: player.latLng,
+    cell: player.cell,
+    points: player.points,
+    ownedCoins: player.ownedCoins,
+  };
+  localStorage.setItem("player", JSON.stringify(playerState));
+  localStorage.setItem("mementoCache", JSON.stringify(mementoCache));
+}
+
+function loadGameState() {
+  const savedPlayer = localStorage.getItem("player");
+  const savedMementoCache = localStorage.getItem("mementoCache");
+
+  if (savedPlayer) {
+    const parsedPlayer = JSON.parse(savedPlayer);
+    player.latLng = leaflet.latLng(
+      parsedPlayer.latLng.lat,
+      parsedPlayer.latLng.lng,
+    );
+    player.cell = parsedPlayer.cell;
+    player.points = parsedPlayer.points;
+    player.ownedCoins = parsedPlayer.ownedCoins;
+    player.marker.setLatLng(player.latLng);
+    map.setView(player.latLng);
+  }
+
+  if (savedMementoCache) {
+    Object.assign(mementoCache, JSON.parse(savedMementoCache));
+  }
+}
+
+//polyline
+const movementHistory: leaflet.LatLng[] = [];
+function updateMovementHistory() {
+  movementHistory.push(player.latLng);
+  const polyline = leaflet.polyline(movementHistory, { color: "blue" });
+  polyline.addTo(map);
+  saveGameState();
+}
+
+//GPS button
+document.getElementById("sensor")!.addEventListener("click", () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.watchPosition((position) => {
+      movePlayerTo(position.coords.latitude, position.coords.longitude);
+    });
+  }
+});
+
+//reset button
+document.getElementById("reset")!.addEventListener("click", () => {
+  if (confirm("Are you sure you want to erase your game state?")) {
+    localStorage.clear();
+    location.reload();
+  }
+});
 
 document.getElementById("north")!.addEventListener(
   "click",
@@ -246,4 +340,5 @@ document.getElementById("west")!.addEventListener(
 );
 
 //main=====================================================================================================================================================
+loadGameState();
 spawnCaches();
