@@ -90,12 +90,12 @@ function setActiveCache(i: number, j: number, cache: Cache) {
 
 function createCache(i: number, j: number): Cache {
   const cell = board.getCellForPoint(leaflet.latLng(
-    OAKES_CLASSROOM.lat + i * TILE_DEGREES,
-    OAKES_CLASSROOM.lng + j * TILE_DEGREES,
+    i * TILE_DEGREES,
+    j * TILE_DEGREES,
   ));
   const latLng = leaflet.latLng(
-    cell.i * TILE_DEGREES,
-    cell.j * TILE_DEGREES,
+    i,
+    j,
   );
   const value = Math.floor(
     luck([cell.i, cell.j, "initialValue"].toString()) * 100,
@@ -119,12 +119,8 @@ function createCache(i: number, j: number): Cache {
     },
   };
 
-  // Check for existing memento
-  if (mementoCache[i]) console.log("existing memento", mementoCache[i][j]);
-  else console.log("no memento");
   if (mementoCache[i] && mementoCache[i][j]) {
     cache.fromMemento(mementoCache[i][j]);
-    console.log("Restored cache from memento", cache);
   }
 
   return cache;
@@ -154,8 +150,8 @@ function handleCacheInteraction(cache: Cache) {
           }
           statusPanel.innerHTML = `${player.points} points accumulated`;
           updatePopup();
-          const i = Math.floor(cache.latLng.lat * 10000 / 2);
-          const j = Math.floor(cache.latLng.lng * 10000 / 2);
+          const i = Number(cache.id.split(",")[0]);
+          const j = Number(cache.id.split(",")[1]);
           setMemento(i, j, cache.toMemento());
           saveGameState();
         }
@@ -174,8 +170,8 @@ function handleCacheInteraction(cache: Cache) {
           }
           statusPanel.innerHTML = `${player.points} points accumulated`;
           updatePopup();
-          const i = Math.floor(cache.latLng.lat * 10000 / 2);
-          const j = Math.floor(cache.latLng.lng * 10000 / 2);
+          const i = Number(cache.id.split(",")[0]);
+          const j = Number(cache.id.split(",")[1]);
           setMemento(i, j, cache.toMemento());
           saveGameState();
         }
@@ -212,17 +208,6 @@ function spawnCaches() {
 
 //Button Movement
 function movePlayer(deltaLat: number, deltaLng: number) {
-  //create memento for all caches in activeCaches
-  // for (let i = 359000; i < 370000; i++) {
-  //   if (activeCaches[i]) {
-  //     for (let j = -1220700; j < -1220400; j++) {
-  //       if (activeCaches[i][j]) {
-  //         setMemento(i, j, activeCaches[i][j].toMemento());
-  //       }
-  //     }
-  //   }
-  // }
-
   player.latLng = leaflet.latLng(
     player.latLng.lat + deltaLat,
     player.latLng.lng + deltaLng,
@@ -245,16 +230,6 @@ function movePlayer(deltaLat: number, deltaLng: number) {
 
 // GPS movement
 function movePlayerTo(lat: number, lng: number) {
-  //create memento for all caches in activeCaches
-  // for (let i = 359000; i < 370000; i++) {
-  //   if (activeCaches[i]) {
-  //     for (let j = -1220700; j < -1220400; j++) {
-  //       if (activeCaches[i][j]) {
-  //         setMemento(i, j, activeCaches[i][j].toMemento());
-  //       }
-  //     }
-  //   }
-  // }
   player.latLng = leaflet.latLng(lat, lng);
   player.cell = board.getCellForPoint(player.latLng);
   player.marker.setLatLng(player.latLng);
@@ -272,7 +247,7 @@ function movePlayerTo(lat: number, lng: number) {
   saveGameState();
 }
 
-// Save/load doesnt seem to work, but it doesn't seem to break anything either.
+// Save game state
 function saveGameState() {
   const playerState = {
     latLng: player.latLng,
@@ -281,7 +256,6 @@ function saveGameState() {
     ownedCoins: player.ownedCoins,
   };
   localStorage.setItem("player", JSON.stringify(playerState));
-  //console.log("Saved player");
 
   for (let i = 359000; i < 370000; i++) {
     if (mementoCache[i]) {
@@ -291,8 +265,6 @@ function saveGameState() {
             `mementoCache[${i}][${j}]`,
             JSON.stringify(mementoCache[i][j]),
           );
-          const memento = localStorage.getItem(`mementoCache[${i}][${j}]`);
-          if (memento) console.log("Saved memento", JSON.parse(memento));
         }
       }
     }
@@ -311,7 +283,6 @@ function loadGameState() {
     player.cell = parsedPlayer.cell;
     player.points = parsedPlayer.points;
     player.ownedCoins = parsedPlayer.ownedCoins;
-    //console.log(player.ownedCoins);
     player.marker.setLatLng(player.latLng);
     map.setView(player.latLng);
     statusPanel.innerHTML = `${player.points} points accumulated`;
@@ -322,7 +293,6 @@ function loadGameState() {
       const memento = localStorage.getItem(`mementoCache[${i}][${j}]`);
       if (memento) {
         setMemento(i, j, JSON.parse(memento));
-        console.log("Restored memento", mementoCache[i][j]);
       }
     }
   }
