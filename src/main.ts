@@ -120,8 +120,11 @@ function createCache(i: number, j: number): Cache {
   };
 
   // Check for existing memento
+  if (mementoCache[i]) console.log("existing memento", mementoCache[i][j]);
+  else console.log("no memento");
   if (mementoCache[i] && mementoCache[i][j]) {
     cache.fromMemento(mementoCache[i][j]);
+    console.log("Restored cache from memento", cache);
   }
 
   return cache;
@@ -151,6 +154,9 @@ function handleCacheInteraction(cache: Cache) {
           }
           statusPanel.innerHTML = `${player.points} points accumulated`;
           updatePopup();
+          const i = Math.floor(cache.latLng.lat * 10000 / 2);
+          const j = Math.floor(cache.latLng.lng * 10000 / 2);
+          setMemento(i, j, cache.toMemento());
           saveGameState();
         }
       },
@@ -168,6 +174,9 @@ function handleCacheInteraction(cache: Cache) {
           }
           statusPanel.innerHTML = `${player.points} points accumulated`;
           updatePopup();
+          const i = Math.floor(cache.latLng.lat * 10000 / 2);
+          const j = Math.floor(cache.latLng.lng * 10000 / 2);
+          setMemento(i, j, cache.toMemento());
           saveGameState();
         }
       },
@@ -204,15 +213,15 @@ function spawnCaches() {
 //Button Movement
 function movePlayer(deltaLat: number, deltaLng: number) {
   //create memento for all caches in activeCaches
-  for (let i = 359000; i < 370000; i++) {
-    if (activeCaches[i]) {
-      for (let j = -1220700; j < -1220400; j++) {
-        if (activeCaches[i][j]) {
-          setMemento(i, j, activeCaches[i][j].toMemento());
-        }
-      }
-    }
-  }
+  // for (let i = 359000; i < 370000; i++) {
+  //   if (activeCaches[i]) {
+  //     for (let j = -1220700; j < -1220400; j++) {
+  //       if (activeCaches[i][j]) {
+  //         setMemento(i, j, activeCaches[i][j].toMemento());
+  //       }
+  //     }
+  //   }
+  // }
 
   player.latLng = leaflet.latLng(
     player.latLng.lat + deltaLat,
@@ -237,15 +246,15 @@ function movePlayer(deltaLat: number, deltaLng: number) {
 // GPS movement
 function movePlayerTo(lat: number, lng: number) {
   //create memento for all caches in activeCaches
-  for (let i = 359000; i < 370000; i++) {
-    if (activeCaches[i]) {
-      for (let j = -1220700; j < -1220400; j++) {
-        if (activeCaches[i][j]) {
-          setMemento(i, j, activeCaches[i][j].toMemento());
-        }
-      }
-    }
-  }
+  // for (let i = 359000; i < 370000; i++) {
+  //   if (activeCaches[i]) {
+  //     for (let j = -1220700; j < -1220400; j++) {
+  //       if (activeCaches[i][j]) {
+  //         setMemento(i, j, activeCaches[i][j].toMemento());
+  //       }
+  //     }
+  //   }
+  // }
   player.latLng = leaflet.latLng(lat, lng);
   player.cell = board.getCellForPoint(player.latLng);
   player.marker.setLatLng(player.latLng);
@@ -259,6 +268,7 @@ function movePlayerTo(lat: number, lng: number) {
   });
 
   spawnCaches();
+  updateMovementHistory();
   saveGameState();
 }
 
@@ -271,12 +281,26 @@ function saveGameState() {
     ownedCoins: player.ownedCoins,
   };
   localStorage.setItem("player", JSON.stringify(playerState));
-  localStorage.setItem("mementoCache", JSON.stringify(mementoCache));
+  //console.log("Saved player");
+
+  for (let i = 359000; i < 370000; i++) {
+    if (mementoCache[i]) {
+      for (let j = -1220700; j < -1220400; j++) {
+        if (mementoCache[i][j]) {
+          localStorage.setItem(
+            `mementoCache[${i}][${j}]`,
+            JSON.stringify(mementoCache[i][j]),
+          );
+          const memento = localStorage.getItem(`mementoCache[${i}][${j}]`);
+          if (memento) console.log("Saved memento", JSON.parse(memento));
+        }
+      }
+    }
+  }
 }
 
 function loadGameState() {
   const savedPlayer = localStorage.getItem("player");
-  const savedMementoCache = localStorage.getItem("mementoCache");
 
   if (savedPlayer) {
     const parsedPlayer = JSON.parse(savedPlayer);
@@ -287,12 +311,20 @@ function loadGameState() {
     player.cell = parsedPlayer.cell;
     player.points = parsedPlayer.points;
     player.ownedCoins = parsedPlayer.ownedCoins;
+    //console.log(player.ownedCoins);
     player.marker.setLatLng(player.latLng);
     map.setView(player.latLng);
+    statusPanel.innerHTML = `${player.points} points accumulated`;
   }
 
-  if (savedMementoCache) {
-    Object.assign(mementoCache, JSON.parse(savedMementoCache));
+  for (let i = 359000; i < 370000; i++) {
+    for (let j = -1220700; j < -1220400; j++) {
+      const memento = localStorage.getItem(`mementoCache[${i}][${j}]`);
+      if (memento) {
+        setMemento(i, j, JSON.parse(memento));
+        console.log("Restored memento", mementoCache[i][j]);
+      }
+    }
   }
 }
 
@@ -302,7 +334,7 @@ function updateMovementHistory() {
   movementHistory.push(player.latLng);
   const polyline = leaflet.polyline(movementHistory, { color: "blue" });
   polyline.addTo(map);
-  saveGameState();
+  //saveGameState();
 }
 
 //GPS button
@@ -310,6 +342,7 @@ document.getElementById("sensor")!.addEventListener("click", () => {
   if (navigator.geolocation) {
     navigator.geolocation.watchPosition((position) => {
       movePlayerTo(position.coords.latitude, position.coords.longitude);
+      updateMovementHistory();
     });
   }
 });
@@ -330,11 +363,11 @@ document.getElementById("south")!.addEventListener(
   "click",
   () => movePlayer(-TILE_DEGREES, 0),
 );
-document.getElementById("east")!.addEventListener(
+document.getElementById("west")!.addEventListener(
   "click",
   () => movePlayer(0, -TILE_DEGREES),
 );
-document.getElementById("west")!.addEventListener(
+document.getElementById("east")!.addEventListener(
   "click",
   () => movePlayer(0, TILE_DEGREES),
 );
