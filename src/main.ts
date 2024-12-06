@@ -126,58 +126,81 @@ function createCache(i: number, j: number): Cache {
   return cache;
 }
 
-// All popup interactions
-function handleCacheInteraction(cache: Cache) {
+function createPopupUI(cache: Cache): HTMLDivElement {
   const popupDiv = document.createElement("div");
+  popupDiv.innerHTML = `
+    <div>There is a cache here at "${cache.id}". It has value <span id="value">${cache.value}</span>.</div>
+    <div id="coins">Coins: ${
+    cache.coins.map((coin) => `${coin.id}#${coin.serial}`).join(", ")
+  }</div>
+    <button id="collect">Collect</button>
+    <button id="deposit">Deposit</button>`;
+  return popupDiv;
+}
+
+function updatePopupUI(popupDiv: HTMLDivElement, cache: Cache) {
+  const coinList = cache.coins.map((coin) => `${coin.id}#${coin.serial}`).join(
+    ", ",
+  );
+  popupDiv.querySelector<HTMLSpanElement>("#value")!.innerText = cache.value
+    .toString();
+  const coinsDiv = popupDiv.querySelector<HTMLDivElement>("#coins");
+  if (coinsDiv) {
+    coinsDiv.innerText = `Coins: ${coinList}`;
+  }
+}
+
+function manageCacheState(cache: Cache, action: "collect" | "deposit") {
+  if (action === "collect" && cache.value > 0) {
+    cache.value--;
+    player.points++;
+    const collectedCoin = cache.coins.pop();
+    if (collectedCoin) {
+      player.ownedCoins.push(collectedCoin);
+    }
+  } else if (
+    action === "deposit" && player.points > 0 && player.ownedCoins.length > 0
+  ) {
+    cache.value++;
+    player.points--;
+    const depositedCoin = player.ownedCoins.pop();
+    if (depositedCoin) {
+      cache.coins.push(depositedCoin);
+    }
+  }
+  statusPanel.innerHTML = `${player.points} points accumulated`;
+}
+
+function persistCacheChanges(cache: Cache) {
+  const [i, j] = cache.id.split(",").map(Number);
+  setMemento(i, j, cache.toMemento());
+  saveGameState();
+}
+
+function handleCacheInteraction(cache: Cache) {
+  const popupDiv = createPopupUI(cache);
+
   const updatePopup = () => {
-    const coinList = cache.coins.map((coin) => `${coin.id}#${coin.serial}`)
-      .join(", ");
-    popupDiv.innerHTML = `
-      <div>There is a cache here at "${cache.id}". It has value <span id="value">${cache.value}</span>.</div>
-      <div>Coins: ${coinList}</div>
-      <button id="collect">Collect</button>
-      <button id="deposit">Deposit</button>`;
-
-    popupDiv.querySelector<HTMLButtonElement>("#collect")!.addEventListener(
-      "click",
-      () => {
-        if (cache.value > 0) {
-          cache.value--;
-          player.points++;
-          const collectedCoin = cache.coins.pop();
-          if (collectedCoin) {
-            player.ownedCoins.push(collectedCoin);
-          }
-          statusPanel.innerHTML = `${player.points} points accumulated`;
-          updatePopup();
-          const i = Number(cache.id.split(",")[0]);
-          const j = Number(cache.id.split(",")[1]);
-          setMemento(i, j, cache.toMemento());
-          saveGameState();
-        }
-      },
-    );
-
-    popupDiv.querySelector<HTMLButtonElement>("#deposit")!.addEventListener(
-      "click",
-      () => {
-        if (player.points > 0 && player.ownedCoins.length > 0) {
-          cache.value++;
-          player.points--;
-          const depositedCoin = player.ownedCoins.pop();
-          if (depositedCoin) {
-            cache.coins.push(depositedCoin);
-          }
-          statusPanel.innerHTML = `${player.points} points accumulated`;
-          updatePopup();
-          const i = Number(cache.id.split(",")[0]);
-          const j = Number(cache.id.split(",")[1]);
-          setMemento(i, j, cache.toMemento());
-          saveGameState();
-        }
-      },
-    );
+    updatePopupUI(popupDiv, cache);
   };
+
+  popupDiv.querySelector<HTMLButtonElement>("#collect")!.addEventListener(
+    "click",
+    () => {
+      manageCacheState(cache, "collect");
+      updatePopup();
+      persistCacheChanges(cache);
+    },
+  );
+
+  popupDiv.querySelector<HTMLButtonElement>("#deposit")!.addEventListener(
+    "click",
+    () => {
+      manageCacheState(cache, "deposit");
+      updatePopup();
+      persistCacheChanges(cache);
+    },
+  );
 
   updatePopup();
 
